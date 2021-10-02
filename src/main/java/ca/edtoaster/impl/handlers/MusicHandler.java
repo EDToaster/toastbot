@@ -9,6 +9,7 @@ import ca.edtoaster.annotations.Option;
 import ca.edtoaster.commands.data.ButtonInteractionData;
 import ca.edtoaster.commands.data.SlashInteractionData;
 import ca.edtoaster.commands.data.Whatever;
+import ca.edtoaster.impl.ExposingAudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
@@ -46,6 +47,7 @@ public class MusicHandler extends InteractionHandler {
     private final DiscordClient discordClient;
 
     private final TrackScheduler trackScheduler;
+    private final ExposingAudioPlayerManager playerManager;
 
     // Keeps the previous queue type interactions here, to delete later.
     private final List<InteractionResponse> previousQueueInteractions;
@@ -79,7 +81,7 @@ public class MusicHandler extends InteractionHandler {
         this.currentVoiceConnection = null;
         this.previousQueueInteractions = new ArrayList<>();
 
-        AudioPlayerManager playerManager = new DefaultAudioPlayerManager();
+        this.playerManager = new ExposingAudioPlayerManager();
         playerManager.getConfiguration().setFrameBufferFactory(NonAllocatingAudioFrameBuffer::new);
         AudioSourceManagers.registerRemoteSources(playerManager);
 
@@ -223,6 +225,15 @@ public class MusicHandler extends InteractionHandler {
                 .flatMap(_v -> event.replyEphemeral("Bye!").then(emit()))
                 .switchIfEmpty(event.replyEphemeral("Cannot disconnect a disconnected bot...").then(emit()))
                 .then();
+    }
+
+    @Command(description = "Get supported protocols")
+    public Mono<Void> help(SlashInteractionData data) {
+        SlashCommandEvent event = data.getEvent();
+
+        log.info("Getting supported protocols");
+        List<String> supportedManagers = playerManager.getManagers().stream().map(s -> "-- `" + s + "`").collect(Collectors.toList());
+        return event.replyEphemeral("Supported audio sources are:\n" + String.join("\n", supportedManagers));
     }
 
     public static InteractionHandlerSpec getInteractionHandlerSpec() {
