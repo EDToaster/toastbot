@@ -102,11 +102,11 @@ public class MusicHandler extends InteractionHandler {
 
         List<Button> buttons = List.of(
                 Button.primary(PlayPauseControl.PLAY_PAUSE.getButtonID(),
-                        trackScheduler.isPaused() ? ReactionEmoji.unicode("▶") : ReactionEmoji.unicode("⏸"),
+                        trackScheduler.isPaused() ? ReactionEmoji.unicode("\u25B6") : ReactionEmoji.unicode("\u23F8"),
                         trackScheduler.isPaused() ? "Resume" : "Pause").disabled(!trackScheduler.hasTrackPlaying()),
-                Button.primary(PlayPauseControl.SKIP.getButtonID(), ReactionEmoji.unicode("⏭"), "Skip").disabled(!trackScheduler.hasTrackPlaying()),
-                Button.danger(PlayPauseControl.CLEAR.getButtonID(), ReactionEmoji.unicode("❕"), "Clear Queue").disabled(trackScheduler.queueIsEmpty()),
-                Button.danger(PlayPauseControl.KILL.getButtonID(), ReactionEmoji.unicode("☠️"), "Disconnect")
+                Button.primary(PlayPauseControl.SKIP.getButtonID(), ReactionEmoji.unicode("\u23ED"), "Skip").disabled(!trackScheduler.hasTrackPlaying()),
+                Button.danger(PlayPauseControl.CLEAR.getButtonID(), ReactionEmoji.unicode("\u2755"), "Clear Queue").disabled(trackScheduler.queueIsEmpty()),
+                Button.danger(PlayPauseControl.KILL.getButtonID(), ReactionEmoji.unicode("\u2620"), "Disconnect")
         );
 
         return m.addEmbed(embed -> {
