@@ -11,6 +11,10 @@ permissions:
     group: ec2-user
 
 hooks:
+  BeforeInstall:
+    - location: scripts/dependencies.sh
+      timeout: 120
+      runas: ec2-user
   ApplicationStop:
     - location: scripts/stop.sh
       timeout: 20
