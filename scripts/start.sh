@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 
-echo $DISCORD_SECRET
 cd /home/ec2-user/server
-sudo /user/bin/java -jar target/*.jar &
+export DISCORD_TOKEN=$(cat DISCORD_SECRET)
+sudo /usr/bin/java -jar target/*.jar &

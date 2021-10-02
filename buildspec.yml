@@ -10,7 +10,8 @@ phases:
             java: corretto11
     pre_build:
         commands:
-          - echo Starting build
+          - echo Writing secret $DISCORD_SECRET to file
+          - echo $DISCORD_SECRET > DISCORD_SECRET
     build:
         commands:
           - echo Build started on `date`
@@ -20,6 +21,7 @@ phases:
           - echo Build finished on `date`
 artifacts:
     files:
+      - DISCORD_SECRET
       - target/*
       - scripts/*
       - appspec.yml
