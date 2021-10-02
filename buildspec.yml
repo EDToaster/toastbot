@@ -1,5 +1,9 @@
 version: 0.2
 
+env:
+  secrets-manager:
+    DISCORD_SECRET: arn:aws:secretsmanager:us-west-1:273255435447:secret:DiscordBot:Secret:Prod-ly69g1
+
 phases:
     install:
         runtime-versions:

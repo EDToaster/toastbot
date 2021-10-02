@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
-sudo yum install java
+sudo yum -y install java
 exit 0
