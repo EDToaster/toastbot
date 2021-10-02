@@ -1,8 +1,8 @@
 version: 0.2
 
 env:
-  secrets-manager:
-    DISCORD_SECRET: arn:aws:secretsmanager:us-west-1:273255435447:secret:DiscordBot:Secret:Prod-ly69g1:DISCORD_SECRET_PROD
+    secrets-manager:
+        DISCORD_SECRET: DiscordBot/Secret/Prod:DISCORD_SECRET_PROD
 
 phases:
     install:
