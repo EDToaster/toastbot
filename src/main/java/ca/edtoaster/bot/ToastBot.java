@@ -2,6 +2,7 @@ package ca.edtoaster.bot;
 
 import ca.edtoaster.commands.InteractionHandlerSpec;
 import ca.edtoaster.partition.Partition;
+import ca.edtoaster.util.Utils;
 import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
@@ -13,6 +14,7 @@ import discord4j.core.object.entity.Role;
 import discord4j.core.object.entity.User;
 import discord4j.core.object.entity.channel.Channel;
 import discord4j.rest.util.ApplicationCommandOptionType;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.reactivestreams.Publisher;
@@ -62,6 +64,8 @@ public class ToastBot implements Runnable {
         this.gatewayDiscordClient = discordClient.login().blockOptional().orElseThrow();
         this.botUser = gatewayDiscordClient.getSelf().blockOptional().orElseThrow();
         this.partitionMap = new HashMap<>();
+
+        log.info("Server Invite link: " + Utils.getServerInviteLink(botUser));
 
         // refresh commands and
         gatewayDiscordClient.getGuilds()
