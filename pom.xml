@@ -7,14 +7,19 @@
     <groupId>org.example</groupId>
     <artifactId>toastbot</artifactId>
     <version>1.0-SNAPSHOT</version>
+
+
+    <properties>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+    </properties>
+
     <build>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <configuration>
-                    <source>11</source>
-                    <target>11</target>
                     <archive>
                         <manifest>
                             <mainClass>ca.edtoaster.impl.Main</mainClass>
