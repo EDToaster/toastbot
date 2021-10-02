@@ -59,7 +59,7 @@ public class ToastBot implements Runnable {
 
     @Override
     public void run() {
-        log.info("Running bot");
+        log.info("Running bot with token \"" + token + "\"");
         this.discordClient = DiscordClient.create(token);
         this.gatewayDiscordClient = discordClient.login().blockOptional().orElseThrow();
         this.botUser = gatewayDiscordClient.getSelf().blockOptional().orElseThrow();
