@@ -112,9 +112,9 @@ public class MusicHandler extends InteractionHandler {
         );
 
         return m.addEmbed(embed -> {
-            embed.setTitle("Current Queue")
-                    .setDescription(currentlyPlaying + queue)
-                    .setColor(Color.MOON_YELLOW);
+            embed.setTitle(trackScheduler.isPaused() ? "Paused ..." : "Now Playing:")
+                    .setDescription(currentlyPlaying + "\n" + queue)
+                    .setColor(Color.PINK);
             }).setComponents(ActionRow.of(buttons));
     }
 

@@ -162,18 +162,13 @@ public class TrackScheduler extends AudioEventAdapter {
     }
 
     public String getCurrentlyPlaying() {
-        boolean paused = player.isPaused();
         AudioTrack currentTrack = player.getPlayingTrack();
 
         StringBuilder builder = new StringBuilder();
 
-        if (paused) {
-            builder.append("Bot is currently paused ...\n");
-        }
-
         if (Objects.nonNull(currentTrack)) {
             builder.append(
-                    String.format("Currently playing `%s [%s]/[%s]`\n",
+                    String.format("`%s [%s]/[%s]`",
                             currentTrack.getInfo().title,
                             format(currentTrack.getPosition()),
                             format(currentTrack.getDuration())));
@@ -188,10 +183,9 @@ public class TrackScheduler extends AudioEventAdapter {
         } else {
             return StreamUtils.zipWithIndex(upNext.stream())
                         .limit(20)
-                        .map(i -> String.format("%d -- %s (Requested by %s)",
-                                i.getIndex(),
-                                i.getValue().getTrack().getInfo().title,
-                                i.getValue().getRequester().getUsername()))
+                        .map(i -> String.format("%d -- %s",
+                                i.getIndex() + 1,
+                                i.getValue().getTrack().getInfo().title))
                         .collect(Collectors.joining("\n"));
         }
     }
