@@ -16,4 +16,6 @@ phases:
           - echo Build finished on `date`
 artifacts:
     files:
-      - target/toastbot-1.0-SNAPSHOT.jar
+      - target/*
+      - scripts/*
+      - appspec.yml
