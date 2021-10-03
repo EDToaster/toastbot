@@ -10,8 +10,6 @@ import ca.edtoaster.commands.data.ButtonInteractionData;
 import ca.edtoaster.commands.data.SlashInteractionData;
 import ca.edtoaster.commands.data.Whatever;
 import ca.edtoaster.impl.ExposingAudioPlayerManager;
-import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
-import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.playback.NonAllocatingAudioFrameBuffer;
@@ -24,9 +22,11 @@ import discord4j.core.object.command.Interaction;
 import discord4j.core.object.component.ActionRow;
 import discord4j.core.object.component.Button;
 import discord4j.core.object.entity.Member;
+import discord4j.core.object.entity.Message;
 import discord4j.core.object.reaction.ReactionEmoji;
+import discord4j.core.spec.EmbedCreateSpec;
 import discord4j.core.spec.InteractionApplicationCommandCallbackSpec;
-import discord4j.rest.interaction.InteractionResponse;
+import discord4j.rest.service.ChannelService;
 import discord4j.rest.util.Color;
 import discord4j.voice.VoiceConnection;
 import lombok.Getter;
@@ -45,12 +45,13 @@ import java.util.stream.Collectors;
 public class MusicHandler extends InteractionHandler {
     private final Snowflake namespace;
     private final DiscordClient discordClient;
+    private final ChannelService channelService;
 
     private final TrackScheduler trackScheduler;
     private final ExposingAudioPlayerManager playerManager;
 
     // Keeps the previous queue type interactions here, to delete later.
-    private final List<InteractionResponse> previousQueueInteractions;
+    private final List<Message> previousQueueMessages;
 
     // stateful stuff, like audio connections
     VoiceConnection currentVoiceConnection;
@@ -79,7 +80,8 @@ public class MusicHandler extends InteractionHandler {
         this.namespace = namespace;
         this.discordClient = discordClient;
         this.currentVoiceConnection = null;
-        this.previousQueueInteractions = new ArrayList<>();
+        this.previousQueueMessages = new ArrayList<>();
+        this.channelService = discordClient.getChannelService();
 
         this.playerManager = new ExposingAudioPlayerManager();
         playerManager.getConfiguration().setFrameBufferFactory(NonAllocatingAudioFrameBuffer::new);
@@ -89,20 +91,29 @@ public class MusicHandler extends InteractionHandler {
     }
 
     private Mono<Void> deletePreviousQueueMessages() {
-        List<InteractionResponse> prev = List.copyOf(this.previousQueueInteractions);
-        this.previousQueueInteractions.clear();
+        List<Message> prev = List.copyOf(this.previousQueueMessages);
+        this.previousQueueMessages.clear();
 
         return Flux.fromIterable(prev)
-                .flatMap(InteractionResponse::deleteInitialResponse)
+                .flatMap(Message::delete)
                 .onErrorContinue((t, o) -> {}) // no op on error because it's probably because prev queue is deleted already
                 .then(Mono.empty());
     }
 
     private InteractionApplicationCommandCallbackSpec constructQueueMessage(InteractionApplicationCommandCallbackSpec m) {
+        return m.addEmbed(this::getQueueMessageEmbed).setComponents(ActionRow.of(getQueueMessageButtons()));
+    }
+
+    private EmbedCreateSpec getQueueMessageEmbed(EmbedCreateSpec embed) {
         String currentlyPlaying = this.trackScheduler.getCurrentlyPlaying();
         String queue = this.trackScheduler.getUpNext();
+        return embed.setTitle(trackScheduler.isPaused() ? "Paused ..." : "Now Playing:")
+                .setDescription(currentlyPlaying + "\n" + queue)
+                .setColor(Color.PINK);
+    }
 
-        List<Button> buttons = List.of(
+    private List<Button> getQueueMessageButtons() {
+        return List.of(
                 Button.primary(PlayPauseControl.PLAY_PAUSE.getButtonID(),
                         trackScheduler.isPaused() ? ReactionEmoji.unicode("\u25B6") : ReactionEmoji.unicode("\u23F8"),
                         trackScheduler.isPaused() ? "Resume" : "Pause").disabled(!trackScheduler.hasTrackPlaying()),
@@ -110,13 +121,8 @@ public class MusicHandler extends InteractionHandler {
                 Button.danger(PlayPauseControl.CLEAR.getButtonID(), ReactionEmoji.unicode("\u2755"), "Clear Queue").disabled(trackScheduler.queueIsEmpty()),
                 Button.danger(PlayPauseControl.KILL.getButtonID(), ReactionEmoji.unicode("\u2620"), "Disconnect")
         );
-
-        return m.addEmbed(embed -> {
-            embed.setTitle(trackScheduler.isPaused() ? "Paused ..." : "Now Playing:")
-                    .setDescription(currentlyPlaying + "\n" + queue)
-                    .setColor(Color.PINK);
-            }).setComponents(ActionRow.of(buttons));
     }
+
 
     private InteractionApplicationCommandCallbackSpec constructDisconnectMessage(InteractionApplicationCommandCallbackSpec m) {
         return m.setContent("Bye!");
@@ -124,14 +130,18 @@ public class MusicHandler extends InteractionHandler {
 
     @Command(description = "Show the queue")
     public Mono<Void> q(SlashInteractionData data) {
-        return deletePreviousQueueMessages()
-                .doOnSuccess((v) -> this.previousQueueInteractions.add(data.getEvent().getInteractionResponse()))
-                .then(data.getEvent().reply(this::constructQueueMessage));
-    }
-
-    public Mono<AudioTrack> skip() {
-        return Mono.justOrEmpty(this.currentVoiceConnection)
-                .flatMap(v -> trackScheduler.skip());
+        // ack and send new message
+        SlashCommandEvent event = data.getEvent();
+        Interaction interaction = event.getInteraction();
+        return event.replyEphemeral("Showing queue")
+                .then(this.deletePreviousQueueMessages())
+                .then(interaction.getChannel())
+                .flatMap(channel ->
+                        channel.createMessage(spec ->
+                                spec.addEmbed(this::getQueueMessageEmbed)
+                                        .setComponents(ActionRow.of(getQueueMessageButtons()))))
+                .doOnNext(this.previousQueueMessages::add)
+                .then();
     }
 
     @ButtonListener(prefix = PlayPauseControl.PLAY_PAUSE_PREFIX)
@@ -157,6 +167,11 @@ public class MusicHandler extends InteractionHandler {
         }
 
         return event.acknowledge(); // will never happen unless control is null >:(
+    }
+
+    public Mono<AudioTrack> skip() {
+        return Mono.justOrEmpty(this.currentVoiceConnection)
+                .flatMap(v -> trackScheduler.skip());
     }
 
     @Command(description = "Play a song")
