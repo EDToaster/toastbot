@@ -13,6 +13,7 @@ import discord4j.core.event.domain.lifecycle.ReadyEvent;
 import discord4j.core.object.entity.Role;
 import discord4j.core.object.entity.User;
 import discord4j.core.object.entity.channel.Channel;
+import discord4j.rest.service.UserService;
 import discord4j.rest.util.ApplicationCommandOptionType;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

@@ -87,7 +87,7 @@ public class MusicHandler extends InteractionHandler {
         playerManager.getConfiguration().setFrameBufferFactory(NonAllocatingAudioFrameBuffer::new);
         AudioSourceManagers.registerRemoteSources(playerManager);
 
-        this.trackScheduler = new TrackScheduler(playerManager);
+        this.trackScheduler = new TrackScheduler(playerManager, this);
     }
 
     private Mono<Void> deletePreviousQueueMessages() {
@@ -144,6 +144,21 @@ public class MusicHandler extends InteractionHandler {
                 .then();
     }
 
+    public Mono<Integer> refreshQueueMessages() {
+        return Flux.fromIterable(this.previousQueueMessages)
+                .flatMap(message -> message.edit(spec ->
+                        spec.addEmbed(this::getQueueMessageEmbed)
+                                .setComponents(ActionRow.of(getQueueMessageButtons()))))
+                .onErrorContinue((t, o) -> {})
+                .collect(Collectors.toList())
+                .doOnNext(l -> {
+                    log.info(l.size() + " messages edited");
+                    this.previousQueueMessages.clear();
+                    this.previousQueueMessages.addAll(l);
+                    log.info("Added all");
+                }).doOnError(log::fatal).map(List::size).log();
+    }
+
     @ButtonListener(prefix = PlayPauseControl.PLAY_PAUSE_PREFIX)
     public Mono<Void> handlePlayPause(ButtonInteractionData data) {
         log.info("Play pause event gotten");
@@ -181,10 +196,9 @@ public class MusicHandler extends InteractionHandler {
         SlashCommandEvent event = data.getEvent();
         return Mono.justOrEmpty(this.currentVoiceConnection)
                 .flatMap(v -> trackScheduler.tryQueue(url, data.getWho())
-                        .take(20)
                         .map(a -> "- " + a.title)
                         .collect(Collectors.toList())
-                        .map(l -> l.isEmpty() ? "No song found" : "Songs put in queue:\n" + String.join("\n", l))
+                        .map(l -> l.isEmpty() ? "No song found" : String.format("Put %d songs in queue", l.size()))
                         .onErrorReturn("No song found")
                         .doOnNext(log::info))
                 .flatMap(titles -> event.reply(titles).then(emit()))

@@ -1,5 +1,6 @@
 package ca.edtoaster.audio;
 
+import ca.edtoaster.impl.handlers.MusicHandler;
 import com.codepoetics.protonpack.StreamUtils;
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
@@ -44,13 +45,16 @@ public class TrackScheduler extends AudioEventAdapter {
     @Getter
     private final LavaPlayerAudioProvider provider;
 
-    public TrackScheduler(AudioPlayerManager manager) {
+    private final MusicHandler handler;
+
+    public TrackScheduler(AudioPlayerManager manager, MusicHandler handler) {
         this.upNext = new ArrayDeque<>();
         this.manager = manager;
         this.player = manager.createPlayer();
         player.setVolume(40);
         this.player.addListener(this);
         this.provider = new LavaPlayerAudioProvider(player);
+        this.handler = handler;
     }
 
     // public methods
@@ -181,12 +185,17 @@ public class TrackScheduler extends AudioEventAdapter {
         if (queueIsEmpty()) {
             return "There are no songs left in the queue";
         } else {
-            return StreamUtils.zipWithIndex(upNext.stream())
+            int numUpNext = upNext.size();
+            int andMore = numUpNext - 20;
+            String content = StreamUtils.zipWithIndex(upNext.stream())
                         .limit(20)
-                        .map(i -> String.format("%d -- %s",
-                                i.getIndex() + 1,
+                        .map(i -> String.format(":small_blue_diamond: %s",
                                 i.getValue().getTrack().getInfo().title))
                         .collect(Collectors.joining("\n"));
+            if (andMore > 0) {
+                content = content + "\nand " + andMore + " more...";
+            }
+            return content;
         }
     }
 
@@ -195,9 +204,10 @@ public class TrackScheduler extends AudioEventAdapter {
 
     @Override
     public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason) {
+
         if (endReason.mayStartNext) {
             log.info("OnTrackEnd called");
-            skip();
+            skip().then(this.handler.refreshQueueMessages()).subscribe();
         }
 
         // endReason == FINISHED: A track finished or died by an exception (mayStartNext = true).
