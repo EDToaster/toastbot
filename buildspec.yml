@@ -2,7 +2,8 @@ version: 0.2
 
 env:
     secrets-manager:
-        DISCORD_SECRET: DiscordBot/Secret/Prod:DISCORD_SECRET_PROD
+      DISCORD_SECRET_PROD: DiscordBot/Secret/Prod:DISCORD_SECRET
+      DISCORD_SECRET_BETA: DiscordBot/Secret/Beta:DISCORD_SECRET
 
 phases:
     install:
@@ -10,8 +11,10 @@ phases:
             java: corretto11
     pre_build:
         commands:
-          - echo Writing secret $DISCORD_SECRET to file
-          - echo $DISCORD_SECRET > DISCORD_SECRET
+          - echo Writing secret $DISCORD_SECRET_PROD to file
+          - echo Writing secret $DISCORD_SECRET_BETA to file
+          - echo $DISCORD_SECRET_PROD > DISCORD_SECRET_Prod
+          - echo $DISCORD_SECRET_BETA > DISCORD_SECRET_Beta
     build:
         commands:
           - echo Build started on `date`
