@@ -24,7 +24,7 @@ phases:
           - echo Build finished on `date`
 artifacts:
     files:
-      - DISCORD_SECRET
+      - DISCORD_SECRET_*
       - target/*
       - scripts/*
       - appspec.yml
