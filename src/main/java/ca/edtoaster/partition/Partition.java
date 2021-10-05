@@ -157,17 +157,10 @@ public class Partition {
         ApplicationService service = discordClient.getApplicationService();
 
         long guildID = namespace.asLong();
-        long appID = discordClient.getApplicationId().block();
 
-        return service.getGuildApplicationCommands(appID, guildID)
-                .doOnNext(c -> log.info(String.format("[Guild %s] Found command \"%s\" to delete.", guildID, c.name())))
-                .map(ApplicationCommandData::id)
-                .flatMap(id -> service.deleteGuildApplicationCommand(appID, guildID, Snowflake.asLong(id)))
-                .thenMany(Flux.fromIterable(commandRequests))
-                .flatMap(c -> service.createGuildApplicationCommand(appID, guildID, c)
-                        .doOnError(e -> log.error("Could not create guild command", e))
-                        .doOnNext(data -> log.info(String.format("[Guild %s] Created command %s.", guildID, data.name()))))
-                .onErrorResume(e -> Mono.empty())
+        return discordClient.getApplicationId()
+                .flatMapMany(appID -> service.bulkOverwriteGuildApplicationCommand(appID, guildID, commandRequests))
+                .doOnNext(a -> log.info(String.format("[Guild %s] Created command %s", guildID, a.name())))
                 .then();
     }
 
