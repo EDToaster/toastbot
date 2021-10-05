@@ -5,5 +5,5 @@ import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
 
 public interface InteractionHandlerFactory {
-    InteractionHandler create(Snowflake namespace, DiscordClient discordClient);
+    Object create(Snowflake namespace, DiscordClient discordClient);
 }

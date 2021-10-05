@@ -1,6 +1,5 @@
 package ca.edtoaster.partition;
 
-import ca.edtoaster.commands.InteractionHandler;
 import ca.edtoaster.commands.data.ButtonInteractionData;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +15,7 @@ public class PartitionedButtonHandler {
     @Getter
     private final String prefix;
     private final Method handlerMethod;
-    private final InteractionHandler handlerInstance;
+    private final Object handlerInstance;
 
     public Publisher<?> handle(ButtonInteractionData interaction) {
         try {

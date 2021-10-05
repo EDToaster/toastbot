@@ -1,10 +1,11 @@
 package ca.edtoaster.impl.handlers;
 
+import ca.edtoaster.annotations.Namespace;
 import ca.edtoaster.commands.InteractionHandlerSpec;
 import ca.edtoaster.annotations.Command;
-import ca.edtoaster.commands.InteractionHandler;
 import ca.edtoaster.annotations.Option;
 import ca.edtoaster.commands.data.SlashInteractionData;
+import ca.edtoaster.util.Utils;
 import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
 import discord4j.core.event.domain.interaction.SlashCommandEvent;
@@ -21,11 +22,12 @@ import java.util.stream.Collectors;
 
 
 @Log4j2
-public class ClearHandler extends InteractionHandler {
+@Namespace(name="util", description = "Utility commands")
+public class UtilityHandler {
     private final Snowflake namespace;
     private final DiscordClient discordClient;
 
-    public ClearHandler(Snowflake namespace, DiscordClient discordClient) {
+    public UtilityHandler(Snowflake namespace, DiscordClient discordClient) {
         this.namespace = namespace;
         this.discordClient = discordClient;
     }
@@ -96,6 +98,12 @@ public class ClearHandler extends InteractionHandler {
     }
 
     public static InteractionHandlerSpec getInteractionHandlerSpec() {
-        return new InteractionHandlerSpec(ClearHandler.class, ClearHandler::new);
+        return new InteractionHandlerSpec(UtilityHandler.class, UtilityHandler::new);
+    }
+
+    @Command(description = "Configuration")
+    public Mono<Void> config(SlashInteractionData data) {
+        SlashCommandEvent event = data.getEvent();
+        return event.replyEphemeral(String.format("Namespace: %s\nServer Invite Link: %s", namespace.asString(), Utils.getServerInviteLink(data.getBotUser())));
     }
 }

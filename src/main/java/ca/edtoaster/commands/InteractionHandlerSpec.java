@@ -4,6 +4,6 @@ import lombok.Data;
 
 @Data
 public class InteractionHandlerSpec {
-    private final Class<? extends InteractionHandler> clazz;
+    private final Class<?> clazz;
     private final InteractionHandlerFactory factory;
 }

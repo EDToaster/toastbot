@@ -1,10 +1,10 @@
 package ca.edtoaster.impl.handlers;
 
+import ca.edtoaster.annotations.Namespace;
 import ca.edtoaster.audio.TrackScheduler;
 import ca.edtoaster.commands.InteractionHandlerSpec;
 import ca.edtoaster.annotations.ButtonListener;
 import ca.edtoaster.annotations.Command;
-import ca.edtoaster.commands.InteractionHandler;
 import ca.edtoaster.annotations.Option;
 import ca.edtoaster.commands.data.ButtonInteractionData;
 import ca.edtoaster.commands.data.SlashInteractionData;
@@ -42,7 +42,8 @@ import java.util.stream.Collectors;
 
 
 @Log4j2
-public class MusicHandler extends InteractionHandler {
+@Namespace(name="music", description = "Music commands")
+public class MusicHandler {
     private final Snowflake namespace;
     private final DiscordClient discordClient;
     private final ChannelService channelService;

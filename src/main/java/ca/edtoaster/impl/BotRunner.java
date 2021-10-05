@@ -1,9 +1,8 @@
 package ca.edtoaster.impl;
 
 import ca.edtoaster.bot.ToastBot;
-import ca.edtoaster.impl.handlers.ClearHandler;
+import ca.edtoaster.impl.handlers.UtilityHandler;
 import ca.edtoaster.impl.handlers.MusicHandler;
-import ca.edtoaster.impl.handlers.StatusHandler;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
@@ -20,8 +19,7 @@ public class BotRunner implements Runnable {
                 () -> new IllegalArgumentException(String.format("%s was not provided in environment variables", DISCORD_TOKEN)));
 
         new ToastBot(token, List.of(
-                ClearHandler.getInteractionHandlerSpec(),
-                MusicHandler.getInteractionHandlerSpec(),
-                StatusHandler.getInteractionHandlerSpec())).run();
+                UtilityHandler.getInteractionHandlerSpec(),
+                MusicHandler.getInteractionHandlerSpec())).run();
     }
 }
