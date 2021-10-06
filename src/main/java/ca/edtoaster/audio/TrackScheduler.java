@@ -19,10 +19,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.net.URL;
-import java.util.ArrayDeque;
-import java.util.List;
-import java.util.Objects;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -31,14 +28,7 @@ public class TrackScheduler extends AudioEventAdapter {
 
     private static final String SEARCH_PREFIX = "ytsearch:";
 
-    @RequiredArgsConstructor
-    @Getter
-    private class AudioTrackContainer {
-        private final User requester;
-        private final AudioTrack track;
-    }
-
-    private final Queue<AudioTrackContainer> upNext;
+    private final Deque<AudioTrack> upNext;
     private final AudioPlayerManager manager;
     private final AudioPlayer player;
 
@@ -92,7 +82,7 @@ public class TrackScheduler extends AudioEventAdapter {
         this.upNext.clear();
     }
 
-    public Flux<AudioTrackInfo> tryQueue(String id, User requester) {
+    public Flux<AudioTrackInfo> tryQueue(String id) {
         // check if ID is an url
         final String searchTerm;
         if (isURL(id)) {
@@ -107,8 +97,8 @@ public class TrackScheduler extends AudioEventAdapter {
                 @Override
                 public void trackLoaded(AudioTrack track) {
                     log.info("Track loaded " + track.getIdentifier());
-                    if (!player.startTrack(track, true)) {
-                        upNext.offer(new AudioTrackContainer(requester, track));
+                    if (!player.startTrack(track.makeClone(), true)) {
+                        upNext.offer(track);
                     }
                     sink.next(track.getInfo());
                     sink.complete();
@@ -128,8 +118,8 @@ public class TrackScheduler extends AudioEventAdapter {
                         // add all tracks to queue
                         for (AudioTrack track : playlist.getTracks()) {
                             // todo: fix hackiness
-                            if (!player.startTrack(track, true)) {
-                                upNext.offer(new AudioTrackContainer(requester, track));
+                            if (!player.startTrack(track.makeClone(), true)) {
+                                upNext.offer(track);
                             }
                             sink.next(track.getInfo());
                         }
@@ -150,11 +140,23 @@ public class TrackScheduler extends AudioEventAdapter {
         });
     }
 
+    public Mono<AudioTrack> restartTrack() {
+        log.info("Refreshing current track");
+        AudioTrack currentTrack = player.getPlayingTrack();
+        currentTrack = currentTrack == null ? null : currentTrack.makeClone();
+//        if (Objects.nonNull(currentTrack)) {
+//            this.upNext.offerFirst(currentTrack);
+//        }
+
+        player.startTrack(currentTrack, false);
+        return Mono.justOrEmpty(currentTrack);
+    }
+
     public Mono<AudioTrack> skip() {
         log.info("Track skipping");
         AudioTrack currentTrack = player.getPlayingTrack();
-        AudioTrackContainer nextTrackContainer = this.upNext.poll();
-        player.startTrack(nextTrackContainer == null ? null : nextTrackContainer.track, false);
+        AudioTrack track = this.upNext.poll();
+        player.startTrack(track == null ? null : track.makeClone(), false);
         return Mono.justOrEmpty(currentTrack);
     }
 
@@ -190,7 +192,7 @@ public class TrackScheduler extends AudioEventAdapter {
             String content = StreamUtils.zipWithIndex(upNext.stream())
                         .limit(20)
                         .map(i -> String.format(":small_blue_diamond: %s",
-                                i.getValue().getTrack().getInfo().title))
+                                i.getValue().getInfo().title))
                         .collect(Collectors.joining("\n"));
             if (andMore > 0) {
                 content = content + "\nand " + andMore + " more...";
@@ -204,9 +206,9 @@ public class TrackScheduler extends AudioEventAdapter {
 
     @Override
     public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason) {
-
+        log.info("OnTrackEnd called");
         if (endReason.mayStartNext) {
-            log.info("OnTrackEnd called");
+            log.info("may start next called");
             skip().then(this.handler.refreshQueueMessages()).subscribe();
         }
 

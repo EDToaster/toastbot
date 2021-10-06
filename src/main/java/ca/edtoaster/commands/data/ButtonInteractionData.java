@@ -15,7 +15,7 @@ public class ButtonInteractionData {
     private final ButtonInteractEvent event;
 
     public void log(Consumer<String> logger) {
-        logger.accept(String.format("Slash interaction event received from %s (%s)", who.getUsername(), who.getId().asString()));
+        logger.accept(String.format("Button interaction event received from %s (%s)", who.getUsername(), who.getId().asString()));
         logger.accept(String.format("In Guild %s", namespace.asString()));
     }
 }

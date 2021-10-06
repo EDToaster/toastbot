@@ -1,6 +1,6 @@
 package ca.edtoaster.impl.handlers;
 
-import ca.edtoaster.annotations.Namespace;
+import ca.edtoaster.annotations.CommandNamespace;
 import ca.edtoaster.audio.TrackScheduler;
 import ca.edtoaster.commands.InteractionHandlerSpec;
 import ca.edtoaster.annotations.ButtonListener;
@@ -34,15 +34,16 @@ import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 
 @Log4j2
-@Namespace(name="music", description = "Music commands")
+@CommandNamespace(name="m", description = "Music commands")
 public class MusicHandler {
     private final Snowflake namespace;
     private final DiscordClient discordClient;
@@ -52,13 +53,15 @@ public class MusicHandler {
     private final ExposingAudioPlayerManager playerManager;
 
     // Keeps the previous queue type interactions here, to delete later.
-    private final List<Message> previousQueueMessages;
+    private final AtomicReference<Message> previousQueueMessage;
+
 
     // stateful stuff, like audio connections
     VoiceConnection currentVoiceConnection;
 
     private enum PlayPauseControl {
         PLAY_PAUSE("PLAY_PAUSE"),
+        RESTART("RESTART"),
         SKIP("SKIP"),
         CLEAR("CLEAR"),
         KILL("KILL");
@@ -81,7 +84,7 @@ public class MusicHandler {
         this.namespace = namespace;
         this.discordClient = discordClient;
         this.currentVoiceConnection = null;
-        this.previousQueueMessages = new ArrayList<>();
+        this.previousQueueMessage = new AtomicReference<>();
         this.channelService = discordClient.getChannelService();
 
         this.playerManager = new ExposingAudioPlayerManager();
@@ -89,15 +92,20 @@ public class MusicHandler {
         AudioSourceManagers.registerRemoteSources(playerManager);
 
         this.trackScheduler = new TrackScheduler(playerManager, this);
+
+        // setup recurring refreshes
+        Flux.interval(Duration.ofMillis(5000))
+                .flatMap(l -> this.refreshQueueMessages())
+                .doOnNext(i -> log.info("Refreshed " + i + " messages"))
+                .subscribe();
     }
 
     private Mono<Void> deletePreviousQueueMessages() {
-        List<Message> prev = List.copyOf(this.previousQueueMessages);
-        this.previousQueueMessages.clear();
+        Message prev = this.previousQueueMessage.getAndSet(null);
 
-        return Flux.fromIterable(prev)
+        return Mono.justOrEmpty(prev)
                 .flatMap(Message::delete)
-                .onErrorContinue((t, o) -> {}) // no op on error because it's probably because prev queue is deleted already
+                .onErrorContinue((t, o) -> {}) // no op on error because it's probably because the message is deleted already
                 .then(Mono.empty());
     }
 
@@ -118,6 +126,7 @@ public class MusicHandler {
                 Button.primary(PlayPauseControl.PLAY_PAUSE.getButtonID(),
                         trackScheduler.isPaused() ? ReactionEmoji.unicode("\u25B6") : ReactionEmoji.unicode("\u23F8"),
                         trackScheduler.isPaused() ? "Resume" : "Pause").disabled(!trackScheduler.hasTrackPlaying()),
+                Button.primary(PlayPauseControl.RESTART.getButtonID(), ReactionEmoji.unicode("\uD83D\uDD02"), "Restart").disabled(!trackScheduler.hasTrackPlaying()),
                 Button.primary(PlayPauseControl.SKIP.getButtonID(), ReactionEmoji.unicode("\u23ED"), "Skip").disabled(!trackScheduler.hasTrackPlaying()),
                 Button.danger(PlayPauseControl.CLEAR.getButtonID(), ReactionEmoji.unicode("\u2755"), "Clear Queue").disabled(trackScheduler.queueIsEmpty()),
                 Button.danger(PlayPauseControl.KILL.getButtonID(), ReactionEmoji.unicode("\u2620"), "Disconnect")
@@ -141,23 +150,20 @@ public class MusicHandler {
                         channel.createMessage(spec ->
                                 spec.addEmbed(this::getQueueMessageEmbed)
                                         .setComponents(ActionRow.of(getQueueMessageButtons()))))
-                .doOnNext(this.previousQueueMessages::add)
+                .doOnNext(this.previousQueueMessage::set)
                 .then();
     }
 
     public Mono<Integer> refreshQueueMessages() {
-        return Flux.fromIterable(this.previousQueueMessages)
+        return Mono.justOrEmpty(this.previousQueueMessage.get())
                 .flatMap(message -> message.edit(spec ->
                         spec.addEmbed(this::getQueueMessageEmbed)
                                 .setComponents(ActionRow.of(getQueueMessageButtons()))))
                 .onErrorContinue((t, o) -> {})
-                .collect(Collectors.toList())
-                .doOnNext(l -> {
-                    log.info(l.size() + " messages edited");
-                    this.previousQueueMessages.clear();
-                    this.previousQueueMessages.addAll(l);
-                    log.info("Added all");
-                }).doOnError(log::fatal).map(List::size).log();
+                .doOnNext(this.previousQueueMessage::set)
+                .doOnError(log::fatal)
+                .map(m -> 1)
+                .switchIfEmpty(Mono.just(0));
     }
 
     @ButtonListener(prefix = PlayPauseControl.PLAY_PAUSE_PREFIX)
@@ -171,8 +177,10 @@ public class MusicHandler {
             case PLAY_PAUSE:
                 trackScheduler.togglePause();
                 return event.edit(this::constructQueueMessage);
+            case RESTART:
+                return restartTrack().then(event.edit(this::constructQueueMessage));
             case SKIP:
-                return skip().then(event.edit(this::constructQueueMessage));
+                return skipTrack().then(event.edit(this::constructQueueMessage));
             case CLEAR:
                 trackScheduler.clearQueue();
                 return event.edit(this::constructQueueMessage);
@@ -185,7 +193,12 @@ public class MusicHandler {
         return event.acknowledge(); // will never happen unless control is null >:(
     }
 
-    public Mono<AudioTrack> skip() {
+    public Mono<AudioTrack> restartTrack() {
+        return Mono.justOrEmpty(this.currentVoiceConnection)
+                .flatMap(v -> trackScheduler.restartTrack());
+    }
+
+    public Mono<AudioTrack> skipTrack() {
         return Mono.justOrEmpty(this.currentVoiceConnection)
                 .flatMap(v -> trackScheduler.skip());
     }
@@ -196,7 +209,7 @@ public class MusicHandler {
                            String url) {
         SlashCommandEvent event = data.getEvent();
         return Mono.justOrEmpty(this.currentVoiceConnection)
-                .flatMap(v -> trackScheduler.tryQueue(url, data.getWho())
+                .flatMap(v -> trackScheduler.tryQueue(url)
                         .map(a -> "- " + a.title)
                         .collect(Collectors.toList())
                         .map(l -> l.isEmpty() ? "No song found" : String.format("Put %d songs in queue", l.size()))

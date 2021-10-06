@@ -1,6 +1,6 @@
 package ca.edtoaster.partition;
 
-import ca.edtoaster.annotations.Namespace;
+import ca.edtoaster.annotations.CommandNamespace;
 import ca.edtoaster.bot.ToastBot;
 import ca.edtoaster.commands.InteractionHandlerSpec;
 import ca.edtoaster.annotations.ButtonListener;
@@ -138,7 +138,7 @@ public class Partition {
 
         List<ApplicationCommandOptionData> subCommandRequests = new ArrayList<>();
 
-        Namespace annotation = spec.getClazz().getAnnotation(Namespace.class);
+        CommandNamespace annotation = spec.getClazz().getAnnotation(CommandNamespace.class);
         if (Objects.isNull(annotation)) {
             throw new IllegalArgumentException("Passed in class " + spec.getClazz().toString() + " that was not annotaed with @Namespace");
         }

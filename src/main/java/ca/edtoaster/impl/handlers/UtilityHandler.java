@@ -1,6 +1,6 @@
 package ca.edtoaster.impl.handlers;
 
-import ca.edtoaster.annotations.Namespace;
+import ca.edtoaster.annotations.CommandNamespace;
 import ca.edtoaster.commands.InteractionHandlerSpec;
 import ca.edtoaster.annotations.Command;
 import ca.edtoaster.annotations.Option;
@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 
 
 @Log4j2
-@Namespace(name="util", description = "Utility commands")
+@CommandNamespace(name="util", description = "Utility commands")
 public class UtilityHandler {
     private final Snowflake namespace;
     private final DiscordClient discordClient;
