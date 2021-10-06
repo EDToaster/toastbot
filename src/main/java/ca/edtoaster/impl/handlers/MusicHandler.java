@@ -100,15 +100,6 @@ public class MusicHandler {
                 .subscribe();
     }
 
-    private Mono<Void> deletePreviousQueueMessages() {
-        Message prev = this.previousQueueMessage.getAndSet(null);
-
-        return Mono.justOrEmpty(prev)
-                .flatMap(Message::delete)
-                .onErrorContinue((t, o) -> {}) // no op on error because it's probably because the message is deleted already
-                .then(Mono.empty());
-    }
-
     private InteractionApplicationCommandCallbackSpec constructQueueMessage(InteractionApplicationCommandCallbackSpec m) {
         return m.addEmbed(this::getQueueMessageEmbed).setComponents(ActionRow.of(getQueueMessageButtons()));
     }
@@ -154,12 +145,21 @@ public class MusicHandler {
                 .then();
     }
 
+    private Mono<Void> deletePreviousQueueMessages() {
+        Message prev = this.previousQueueMessage.getAndSet(null);
+
+        return Mono.justOrEmpty(prev)
+                .flatMap(Message::delete)
+                .onErrorResume(e -> Mono.empty()) // no op on error because it's probably because the message is deleted already
+                .then(Mono.empty());
+    }
+
     public Mono<Integer> refreshQueueMessages() {
         return Mono.justOrEmpty(this.previousQueueMessage.get())
                 .flatMap(message -> message.edit(spec ->
                         spec.addEmbed(this::getQueueMessageEmbed)
                                 .setComponents(ActionRow.of(getQueueMessageButtons()))))
-                .onErrorContinue((t, o) -> {})
+                .onErrorResume(e -> Mono.empty())
                 .doOnNext(this.previousQueueMessage::set)
                 .doOnError(log::fatal)
                 .map(m -> 1)
