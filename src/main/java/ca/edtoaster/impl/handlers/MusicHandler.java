@@ -116,10 +116,10 @@ public class MusicHandler {
         return List.of(
                 Button.primary(PlayPauseControl.PLAY_PAUSE.getButtonID(),
                         trackScheduler.isPaused() ? ReactionEmoji.unicode("\u25B6") : ReactionEmoji.unicode("\u23F8"),
-                        trackScheduler.isPaused() ? "Resume" : "Pause").disabled(!trackScheduler.hasTrackPlaying()),
-                Button.primary(PlayPauseControl.RESTART.getButtonID(), ReactionEmoji.unicode("\uD83D\uDD02"), "Restart").disabled(!trackScheduler.hasTrackPlaying()),
-                Button.primary(PlayPauseControl.SKIP.getButtonID(), ReactionEmoji.unicode("\u23ED"), "Skip").disabled(!trackScheduler.hasTrackPlaying()),
-                Button.danger(PlayPauseControl.CLEAR.getButtonID(), ReactionEmoji.unicode("\u2755"), "Clear Queue").disabled(trackScheduler.queueIsEmpty()),
+                        trackScheduler.isPaused() ? "Resume" : "Pause").disabled(!trackScheduler.isTrackPlaying()),
+                Button.primary(PlayPauseControl.RESTART.getButtonID(), ReactionEmoji.unicode("\uD83D\uDD02"), "Restart").disabled(!trackScheduler.isTrackPlaying()),
+                Button.primary(PlayPauseControl.SKIP.getButtonID(), ReactionEmoji.unicode("\u23ED"), "Skip").disabled(!trackScheduler.isTrackPlaying()),
+                Button.danger(PlayPauseControl.CLEAR.getButtonID(), ReactionEmoji.unicode("\u2755"), "Clear Queue").disabled(trackScheduler.isQueueEmpty()),
                 Button.danger(PlayPauseControl.KILL.getButtonID(), ReactionEmoji.unicode("\u2620"), "Disconnect")
         );
     }
@@ -200,7 +200,7 @@ public class MusicHandler {
 
     public Mono<AudioTrack> skipTrack() {
         return Mono.justOrEmpty(this.currentVoiceConnection)
-                .flatMap(v -> trackScheduler.skip());
+                .flatMap(v -> trackScheduler.skipTrack());
     }
 
     @Command(description = "Play a song")
@@ -209,13 +209,15 @@ public class MusicHandler {
                            String url) {
         SlashCommandEvent event = data.getEvent();
         return Mono.justOrEmpty(this.currentVoiceConnection)
-                .flatMap(v -> trackScheduler.tryQueue(url)
-                        .map(a -> "- " + a.title)
+                .flatMap(v -> trackScheduler.queueTracks(url)
                         .collect(Collectors.toList())
-                        .map(l -> l.isEmpty() ? "No song found" : String.format("Put %d songs in queue", l.size()))
+                        .map(l -> l.isEmpty() ? "No song found" : String.format("Queued %s tracks", l.size()))
                         .onErrorReturn("No song found")
                         .doOnNext(log::info))
-                .flatMap(titles -> event.reply(titles).then(emit()))
+                .flatMap(titles -> event.reply(s ->
+                        s.addEmbed(e ->
+                                e.setDescription(titles)
+                                 .setColor(Color.MOON_YELLOW))).then(emit()))
                 .switchIfEmpty(event.replyEphemeral("Bot needs to be summoned in to a voice channel").then(emit()))
                 .then();
     }
@@ -231,7 +233,9 @@ public class MusicHandler {
             return data.getEvent().replyEphemeral(String.format("Volume %d is not in range of [0-100]", vol));
         }
 
-        return data.getEvent().replyEphemeral(String.format("Volume set to %d", trackScheduler.setVolume(vol.intValue())));
+        trackScheduler.setVolume(vol.intValue());
+
+        return data.getEvent().replyEphemeral(String.format("Volume set to %d", vol.intValue()));
     }
 
     @Command(description = "Summon the bot to join a voice channel")
@@ -252,8 +256,7 @@ public class MusicHandler {
 
     private Mono<Whatever> disconnectVoiceConnection() {
         // clear queue
-        trackScheduler.clearQueue();
-        trackScheduler.stop();
+        trackScheduler.resetPlayer();
 
         return Mono.justOrEmpty(this.currentVoiceConnection)
                 .flatMap(v -> v.disconnect().then(emit()));

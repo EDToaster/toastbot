@@ -11,9 +11,7 @@ import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
-import discord4j.core.object.entity.User;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -24,7 +22,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Log4j2
-public class TrackScheduler extends AudioEventAdapter {
+public class TrackScheduler extends AudioEventAdapter implements MusicPlayer {
 
     private static final String SEARCH_PREFIX = "ytsearch:";
 
@@ -49,32 +47,36 @@ public class TrackScheduler extends AudioEventAdapter {
 
     // public methods
 
-    public int setVolume(int vol) {
+    public void setVolume(int vol) {
         player.setVolume(vol);
-        return getVolume();
     }
 
     public int getVolume() {
         return player.getVolume();
     }
 
-    public boolean queueIsEmpty() {
+    public boolean isQueueEmpty() {
         return upNext.isEmpty();
     }
 
-    public boolean hasTrackPlaying() {
+    public boolean isTrackPlaying() {
         return Objects.nonNull(player.getPlayingTrack());
+    }
+
+
+    public void togglePause() {
+        setPaused(!isPaused());
     }
 
     public boolean isPaused() {
         return player.isPaused();
     }
-
-    public void togglePause() {
-        player.setPaused(!player.isPaused());
+    public void setPaused(boolean paused) {
+        player.setPaused(paused);
     }
 
-    public void stop() {
+    public void resetPlayer() {
+        this.clearQueue();
         player.stopTrack();
     }
 
@@ -82,13 +84,13 @@ public class TrackScheduler extends AudioEventAdapter {
         this.upNext.clear();
     }
 
-    public Flux<AudioTrackInfo> tryQueue(String id) {
+    public Flux<AudioTrackInfo> queueTracks(String queryString) {
         // check if ID is an url
         final String searchTerm;
-        if (isURL(id)) {
-            searchTerm = id;
+        if (isURL(queryString)) {
+            searchTerm = queryString;
         } else {
-            searchTerm = SEARCH_PREFIX + id;
+            searchTerm = SEARCH_PREFIX + queryString;
         }
 
         log.info("Try queue");
@@ -129,12 +131,12 @@ public class TrackScheduler extends AudioEventAdapter {
 
                 @Override
                 public void noMatches() {
-                    sink.error(new IllegalAccessError(String.format("No matches for song %s", id)));
+                    sink.error(new IllegalAccessError(String.format("No matches for song %s", queryString)));
                 }
 
                 @Override
                 public void loadFailed(FriendlyException exception) {
-                    sink.error(new IllegalAccessError(String.format("Could not load song %s", id)));
+                    sink.error(new IllegalAccessError(String.format("Could not load song %s", queryString)));
                 }
             });
         });
@@ -152,7 +154,7 @@ public class TrackScheduler extends AudioEventAdapter {
         return Mono.justOrEmpty(currentTrack);
     }
 
-    public Mono<AudioTrack> skip() {
+    public Mono<AudioTrack> skipTrack() {
         log.info("Track skipping");
         AudioTrack currentTrack = player.getPlayingTrack();
         AudioTrack track = this.upNext.poll();
@@ -184,7 +186,7 @@ public class TrackScheduler extends AudioEventAdapter {
     }
 
     public String getUpNext() {
-        if (queueIsEmpty()) {
+        if (isQueueEmpty()) {
             return "There are no songs left in the queue";
         } else {
             int numUpNext = upNext.size();
@@ -209,7 +211,7 @@ public class TrackScheduler extends AudioEventAdapter {
         log.info("OnTrackEnd called");
         if (endReason.mayStartNext) {
             log.info("may start next called");
-            skip().then(this.handler.refreshQueueMessages()).subscribe();
+            skipTrack().then(this.handler.refreshQueueMessages()).subscribe();
         }
 
         // endReason == FINISHED: A track finished or died by an exception (mayStartNext = true).
