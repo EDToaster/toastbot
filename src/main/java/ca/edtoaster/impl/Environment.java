@@ -12,15 +12,19 @@ public class Environment {
     public static final String DISCORD_TOKEN = "DISCORD_TOKEN";
     public static final String USER_DIR = "user.dir";
 
-    private Optional<String> fetch(String key) {
+    private Optional<String> getOptional(String key) {
         return Optional.ofNullable(env.getOrDefault(key, null));
     }
 
-    public Optional<String> getDiscordToken() {
-        return fetch(DISCORD_TOKEN);
+    private String getOrThrow(String key) {
+        return getOptional(key).orElseThrow();
     }
 
-    public Optional<String> getUserDir() {
-        return fetch(USER_DIR);
+    public String getDiscordToken() {
+        return getOrThrow(DISCORD_TOKEN);
+    }
+
+    public String getUserDir() {
+        return getOrThrow(USER_DIR);
     }
 }

@@ -15,8 +15,7 @@ public class BotRunner implements Runnable {
 
     @Override
     public void run() {
-        String token = env.getDiscordToken().orElseThrow(
-                () -> new IllegalArgumentException(String.format("%s was not provided in environment variables", DISCORD_TOKEN)));
+        String token = env.getDiscordToken();
 
         new ToastBot(token, List.of(
                 UtilityHandler.getInteractionHandlerSpec(),
