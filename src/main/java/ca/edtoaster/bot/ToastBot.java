@@ -7,34 +7,36 @@ import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
 import discord4j.core.event.ReactiveEventAdapter;
-import discord4j.core.event.domain.interaction.ButtonInteractEvent;
-import discord4j.core.event.domain.interaction.SlashCommandEvent;
+import discord4j.core.event.domain.interaction.ApplicationCommandInteractionEvent;
+import discord4j.core.event.domain.interaction.ButtonInteractionEvent;
 import discord4j.core.event.domain.lifecycle.ReadyEvent;
+import discord4j.core.event.domain.message.MessageCreateEvent;
+import discord4j.core.object.command.ApplicationCommandOption;
 import discord4j.core.object.entity.Role;
 import discord4j.core.object.entity.User;
 import discord4j.core.object.entity.channel.Channel;
-import discord4j.rest.service.UserService;
-import discord4j.rest.util.ApplicationCommandOptionType;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 @Log4j2
 @RequiredArgsConstructor
 public class ToastBot implements Runnable {
-    public static final Map<Class<?>, ApplicationCommandOptionType> typesMap;
+    public static final Map<Class<?>, ApplicationCommandOption.Type> typesMap;
     static {
         typesMap = new HashMap<>();
-        typesMap.put(String.class, ApplicationCommandOptionType.STRING);
-        typesMap.put(Long.class, ApplicationCommandOptionType.INTEGER);
-        typesMap.put(Boolean.class, ApplicationCommandOptionType.BOOLEAN);
-        typesMap.put(User.class, ApplicationCommandOptionType.USER);
-        typesMap.put(Channel.class, ApplicationCommandOptionType.CHANNEL);
-        typesMap.put(Role.class, ApplicationCommandOptionType.ROLE);
+        typesMap.put(String.class, ApplicationCommandOption.Type.STRING);
+        typesMap.put(Long.class, ApplicationCommandOption.Type.INTEGER);
+        typesMap.put(Boolean.class, ApplicationCommandOption.Type.BOOLEAN);
+        typesMap.put(User.class, ApplicationCommandOption.Type.USER);
+        typesMap.put(Channel.class, ApplicationCommandOption.Type.CHANNEL);
+        typesMap.put(Role.class, ApplicationCommandOption.Type.ROLE);
 
         /*
         SUB_COMMAND(1),
@@ -84,7 +86,7 @@ public class ToastBot implements Runnable {
             }
 
             @Override
-            public Publisher<?> onButtonInteract(ButtonInteractEvent event) {
+            public Publisher<?> onButtonInteraction(ButtonInteractionEvent event) {
                 log.info("Got button interaction event!");
 
                 // check guild id
@@ -92,36 +94,57 @@ public class ToastBot implements Runnable {
 
                 if (Objects.isNull(guildID)) {
                     log.info("Event was not sent from a guild");
-                    return event.replyEphemeral("Commands to this bot must be sent from inside a server");
+                    return event.reply("Commands to this bot must be sent from inside a server").withEphemeral(true);
                 }
 
                 Partition partition = partitionMap.getOrDefault(guildID, null);
                 if (Objects.isNull(partition)) {
                     log.info("Partition " + guildID.asString() + " not found");
-                    return event.replyEphemeral("Something went wrong!");
+                    return event.reply("Something went wrong!").withEphemeral(true);
                 }
 
                 return partition.handleButton(event);
             }
 
             @Override
-            public Publisher<?> onSlashCommand(SlashCommandEvent event) {
+            public Publisher<?> onApplicationCommandInteraction(ApplicationCommandInteractionEvent event) {
                 log.info("Got event");
 
                 // check guild id
                 Snowflake guildID = event.getInteraction().getGuildId().orElse(null);
                 if (Objects.isNull(guildID)) {
                     log.info("Event was not sent from a guild");
-                    return event.replyEphemeral("Commands to this bot must be sent from inside a server");
+                    return event.reply("Commands to this bot must be sent from inside a server").withEphemeral(true);
                 }
 
                 Partition partition = partitionMap.getOrDefault(guildID, null);
                 if (Objects.isNull(partition)) {
                     log.info("Partition " + guildID.asString() + " not found");
-                    return event.replyEphemeral("Something went wrong!");
+                    return event.reply("Something went wrong!").withEphemeral(true);
                 }
 
                 return partition.handleSlash(event);
+            }
+
+            @Override
+            public Publisher<?> onMessageCreate(MessageCreateEvent event) {
+                log.info("Got message");
+
+                // check guild id
+                Snowflake guildID = event.getGuildId().orElse(null);
+                if (Objects.isNull(guildID)) {
+                    log.info("Event was not sent from a guild, or was a private message (ephemeral)");
+                    return Mono.empty();
+                }
+
+                Partition partition = partitionMap.getOrDefault(guildID, null);
+                if (Objects.isNull(partition)) {
+                    log.info("Partition " + guildID.asString() + " not found");
+                    return event.getMessage().getChannel().flatMap(c ->
+                            c.createMessage("Whoa! Something went truly wrong. Reach out to my author to fix me!"));
+                }
+
+                return partition.handleMessageCreate(event);
             }
         }).blockLast();
     }

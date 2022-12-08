@@ -7,7 +7,7 @@ import ca.edtoaster.annotations.ButtonListener;
 import ca.edtoaster.annotations.Command;
 import ca.edtoaster.annotations.Option;
 import ca.edtoaster.commands.data.ButtonInteractionData;
-import ca.edtoaster.commands.data.SlashInteractionData;
+import ca.edtoaster.commands.data.ApplicationCommandInteractionData;
 import ca.edtoaster.commands.data.Whatever;
 import ca.edtoaster.impl.ExposingAudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
@@ -15,8 +15,6 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.playback.NonAllocatingAudioFrameBuffer;
 import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
-import discord4j.core.event.domain.interaction.ButtonInteractEvent;
-import discord4j.core.event.domain.interaction.SlashCommandEvent;
 import discord4j.core.object.VoiceState;
 import discord4j.core.object.command.Interaction;
 import discord4j.core.object.component.ActionRow;
@@ -26,6 +24,8 @@ import discord4j.core.object.entity.Message;
 import discord4j.core.object.reaction.ReactionEmoji;
 import discord4j.core.spec.EmbedCreateSpec;
 import discord4j.core.spec.InteractionApplicationCommandCallbackSpec;
+import discord4j.core.spec.MessageCreateSpec;
+import discord4j.core.spec.MessageEditSpec;
 import discord4j.rest.service.ChannelService;
 import discord4j.rest.util.Color;
 import discord4j.voice.VoiceConnection;
@@ -100,16 +100,19 @@ public class MusicHandler {
                 .subscribe();
     }
 
-    private InteractionApplicationCommandCallbackSpec constructQueueMessage(InteractionApplicationCommandCallbackSpec m) {
-        return m.addEmbed(this::getQueueMessageEmbed).setComponents(ActionRow.of(getQueueMessageButtons()));
+    private InteractionApplicationCommandCallbackSpec constructQueueMessage() {
+        return InteractionApplicationCommandCallbackSpec.create()
+                .withEmbeds(getQueueMessageEmbed())
+                .withComponents(ActionRow.of(getQueueMessageButtons()));
     }
 
-    private EmbedCreateSpec getQueueMessageEmbed(EmbedCreateSpec embed) {
+    private EmbedCreateSpec getQueueMessageEmbed() {
         String currentlyPlaying = this.trackScheduler.getCurrentlyPlaying();
         String queue = this.trackScheduler.getUpNext();
-        return embed.setTitle(trackScheduler.isPaused() ? "Paused ..." : "Now Playing:")
-                .setDescription(currentlyPlaying + "\n" + queue)
-                .setColor(Color.PINK);
+        return EmbedCreateSpec.create()
+                .withTitle(trackScheduler.isPaused() ? "Paused ..." : "Now Playing:")
+                .withDescription(currentlyPlaying + "\n" + queue)
+                .withColor(Color.PINK);
     }
 
     private List<Button> getQueueMessageButtons() {
@@ -126,21 +129,22 @@ public class MusicHandler {
 
 
     private InteractionApplicationCommandCallbackSpec constructDisconnectMessage(InteractionApplicationCommandCallbackSpec m) {
-        return m.setContent("Bye!");
+        return m.withContent("Bye!");
     }
 
     @Command(description = "Show the queue")
-    public Mono<Void> q(SlashInteractionData data) {
+    public Mono<Void> q(ApplicationCommandInteractionData data) {
         // ack and send new message
-        SlashCommandEvent event = data.getEvent();
+        var event = data.getEvent();
         Interaction interaction = event.getInteraction();
-        return event.replyEphemeral("Showing queue")
+        return event.reply("Showing queue").withEphemeral(true)
                 .then(this.deletePreviousQueueMessages())
                 .then(interaction.getChannel())
                 .flatMap(channel ->
-                        channel.createMessage(spec ->
-                                spec.addEmbed(this::getQueueMessageEmbed)
-                                        .setComponents(ActionRow.of(getQueueMessageButtons()))))
+                        channel.createMessage(
+                                MessageCreateSpec.create()
+                                        .withEmbeds(getQueueMessageEmbed())
+                                        .withComponents(ActionRow.of(getQueueMessageButtons()))))
                 .doOnNext(this.previousQueueMessage::set)
                 .then();
     }
@@ -156,9 +160,10 @@ public class MusicHandler {
 
     public Mono<Integer> refreshQueueMessages() {
         return Mono.justOrEmpty(this.previousQueueMessage.get())
-                .flatMap(message -> message.edit(spec ->
-                        spec.addEmbed(this::getQueueMessageEmbed)
-                                .setComponents(ActionRow.of(getQueueMessageButtons()))))
+                .flatMap(message -> message.edit(
+                        MessageEditSpec.create()
+                                .withEmbeds(getQueueMessageEmbed())
+                                .withComponents(ActionRow.of(getQueueMessageButtons()))))
                 .onErrorResume(e -> Mono.empty())
                 .doOnNext(this.previousQueueMessage::set)
                 .doOnError(log::fatal)
@@ -169,24 +174,24 @@ public class MusicHandler {
     @ButtonListener(prefix = PlayPauseControl.PLAY_PAUSE_PREFIX)
     public Mono<Void> handlePlayPause(ButtonInteractionData data) {
         log.info("Play pause event gotten");
-        ButtonInteractEvent event = data.getEvent();
+        var event = data.getEvent();
 
         PlayPauseControl control = PlayPauseControl.of(event.getCustomId());
 
         switch(control) {
             case PLAY_PAUSE:
                 trackScheduler.togglePause();
-                return event.edit(this::constructQueueMessage);
+                return event.edit(constructQueueMessage());
             case RESTART:
-                return restartTrack().then(event.edit(this::constructQueueMessage));
+                return restartTrack().then(event.edit(constructQueueMessage()));
             case SKIP:
-                return skipTrack().then(event.edit(this::constructQueueMessage));
+                return skipTrack().then(event.edit(constructQueueMessage()));
             case CLEAR:
                 trackScheduler.clearQueue();
-                return event.edit(this::constructQueueMessage);
+                return event.edit(constructQueueMessage());
             case KILL:
                 return disconnectVoiceConnection()
-                        .then(event.edit(this::constructDisconnectMessage));
+                        .then(event.edit(constructQueueMessage()));
             default: break;
         }
 
@@ -204,43 +209,48 @@ public class MusicHandler {
     }
 
     @Command(description = "Play a song")
-    public Mono<Void> play(SlashInteractionData data,
+    public Mono<Void> play(ApplicationCommandInteractionData data,
                            @Option(name="video", description="Youtube video link or playlist")
                            String url) {
-        SlashCommandEvent event = data.getEvent();
+        var event = data.getEvent();
         return Mono.justOrEmpty(this.currentVoiceConnection)
                 .flatMap(v -> trackScheduler.queueTracks(url)
                         .collect(Collectors.toList())
                         .map(l -> l.isEmpty() ? "No song found" : String.format("Queued %s tracks", l.size()))
                         .onErrorReturn("No song found")
                         .doOnNext(log::info))
-                .flatMap(titles -> event.reply(s ->
-                        s.addEmbed(e ->
-                                e.setDescription(titles)
-                                 .setColor(Color.MOON_YELLOW))).then(emit()))
-                .switchIfEmpty(event.replyEphemeral("Bot needs to be summoned in to a voice channel").then(emit()))
+                .flatMap(titles -> event.reply(
+                        InteractionApplicationCommandCallbackSpec.create()
+                                .withEmbeds(EmbedCreateSpec.create()
+                                        .withDescription(titles)
+                                        .withColor(Color.MOON_YELLOW)))
+                        .then(emit()))
+                .switchIfEmpty(event
+                        .reply("Bot needs to be summoned in to a voice channel")
+                        .withEphemeral(true)
+                        .then(emit()))
                 .then();
     }
 
     @Command(description = "Get volume of the bot. If supplied with an argument, set the volume [0-100]")
-    public Mono<Void> volume(SlashInteractionData data,
+    public Mono<Void> volume(ApplicationCommandInteractionData data,
                              @Option(name = "volume", description="Volume [0-100]", required = false) Long vol) {
         if (Objects.isNull(vol)) {
-            return data.getEvent().replyEphemeral(String.format("Volume set to %d", trackScheduler.getVolume()));
+            return data.getEvent().reply(String.format("Volume set to %d", trackScheduler.getVolume())).withEphemeral(true);
         }
 
         if (vol < 0 || vol > 100) {
-            return data.getEvent().replyEphemeral(String.format("Volume %d is not in range of [0-100]", vol));
+            return data.getEvent().reply(String.format("Volume %d is not in range of [0-100]", vol)).withEphemeral(true);
         }
 
         trackScheduler.setVolume(vol.intValue());
 
-        return data.getEvent().replyEphemeral(String.format("Volume set to %d", vol.intValue()));
+        return data.getEvent().reply(String.format("Volume set to %d", vol.intValue())).withEphemeral(true);
     }
 
     @Command(description = "Summon the bot to join a voice channel")
-    public Mono<Void> summon(SlashInteractionData data) {
-        SlashCommandEvent event = data.getEvent();
+    public Mono<Void> summon(ApplicationCommandInteractionData data) {
+        var event = data.getEvent();
         Interaction interaction = event.getInteraction();
 
         return Mono.justOrEmpty(interaction.getMember())
@@ -249,8 +259,8 @@ public class MusicHandler {
                 .doOnNext(v -> log.info("Found a voice channel!" + v.getName()))
                 .flatMap(c -> c.join(spec -> spec.setProvider(trackScheduler.getProvider())))
                 .doOnNext(v -> this.currentVoiceConnection = v)
-                .flatMap(v -> event.replyEphemeral("Connected!").then(emit()))
-                .switchIfEmpty(event.replyEphemeral("You must be in a voice channel to summon the bot!").then(emit()))
+                .flatMap(v -> event.reply("Connected!").withEphemeral(true).then(emit()))
+                .switchIfEmpty(event.reply("You must be in a voice channel to summon the bot!").withEphemeral(true).then(emit()))
                 .then();
     }
 
@@ -263,23 +273,23 @@ public class MusicHandler {
     }
 
     @Command(description = "Disconnect the bot")
-    public Mono<Void> disconnect(SlashInteractionData data) {
-        SlashCommandEvent event = data.getEvent();
+    public Mono<Void> disconnect(ApplicationCommandInteractionData data) {
+        var event = data.getEvent();
 
         log.info("Disconnecting the bot from channel");
         return disconnectVoiceConnection()
-                .flatMap(_v -> event.replyEphemeral("Bye!").then(emit()))
-                .switchIfEmpty(event.replyEphemeral("Cannot disconnect a disconnected bot...").then(emit()))
+                .flatMap(_v -> event.reply("Bye!").withEphemeral(true).then(emit()))
+                .switchIfEmpty(event.reply("Cannot disconnect a disconnected bot...").withEphemeral(true).then(emit()))
                 .then();
     }
 
     @Command(description = "Get supported protocols")
-    public Mono<Void> help(SlashInteractionData data) {
-        SlashCommandEvent event = data.getEvent();
+    public Mono<Void> help(ApplicationCommandInteractionData data) {
+        var event = data.getEvent();
 
         log.info("Getting supported protocols");
         List<String> supportedManagers = playerManager.getManagers().stream().map(s -> "-- `" + s + "`").collect(Collectors.toList());
-        return event.replyEphemeral("Supported audio sources are:\n" + String.join("\n", supportedManagers));
+        return event.reply("Supported audio sources are:\n" + String.join("\n", supportedManagers)).withEphemeral(true);
     }
 
     public static InteractionHandlerSpec getInteractionHandlerSpec() {

@@ -1,22 +1,27 @@
 package ca.edtoaster.partition;
 
-import ca.edtoaster.annotations.CommandNamespace;
-import ca.edtoaster.bot.ToastBot;
-import ca.edtoaster.commands.InteractionHandlerSpec;
 import ca.edtoaster.annotations.ButtonListener;
 import ca.edtoaster.annotations.Command;
+import ca.edtoaster.annotations.CommandNamespace;
 import ca.edtoaster.annotations.Option;
+import ca.edtoaster.bot.ToastBot;
+import ca.edtoaster.commands.InteractionHandlerSpec;
+import ca.edtoaster.commands.MessageHandler;
+import ca.edtoaster.commands.data.ApplicationCommandInteractionData;
 import ca.edtoaster.commands.data.ButtonInteractionData;
-import ca.edtoaster.commands.data.SlashInteractionData;
+import ca.edtoaster.commands.data.MessageCreateData;
+import ca.edtoaster.commands.data.Whatever;
 import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
-import discord4j.core.event.domain.interaction.ButtonInteractEvent;
-import discord4j.core.event.domain.interaction.SlashCommandEvent;
+import discord4j.core.event.domain.interaction.ApplicationCommandInteractionEvent;
+import discord4j.core.event.domain.interaction.ButtonInteractionEvent;
+import discord4j.core.event.domain.message.MessageCreateEvent;
+import discord4j.core.object.command.ApplicationCommandOption;
+import discord4j.core.object.entity.Member;
 import discord4j.core.object.entity.User;
 import discord4j.discordjson.json.ApplicationCommandOptionData;
 import discord4j.discordjson.json.ApplicationCommandRequest;
 import discord4j.rest.service.ApplicationService;
-import discord4j.rest.util.ApplicationCommandOptionType;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -26,7 +31,11 @@ import reactor.core.publisher.Mono;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Log4j2
@@ -41,6 +50,7 @@ public class Partition {
     private List<ApplicationCommandRequest> commandRequests;
     private Map<String, PartitionedCommandHandler> commandHandlers;
     private List<PartitionedButtonHandler> buttonHandlers;
+    private List<MessageHandler> messageHandlers;
 
     private ApplicationCommandOptionData configureCommand(final Method method) {
         log.info("Method has command annotation, validating options");
@@ -58,7 +68,7 @@ public class Partition {
 
         // first type needs to be slash command event
         Class<?> slashCommandEvent = parameterTypes[0];
-        if (slashCommandEvent != SlashInteractionData.class) {
+        if (slashCommandEvent != ApplicationCommandInteractionData.class) {
             throw new IllegalArgumentException(String.format("The first parameter of method %s needs to be type SlashInteraction", methodName));
         }
 
@@ -90,7 +100,8 @@ public class Partition {
             if (!ToastBot.typesMap.containsKey(parameterType)) {
                 throw new IllegalArgumentException(String.format("Option %s has unsupported type", parameterType.toString()));
             }
-            ApplicationCommandOptionType type = ToastBot.typesMap.get(parameterType);
+
+            ApplicationCommandOption.Type type = ToastBot.typesMap.get(parameterType);
 
             log.info(String.format("-> %s: %s (%s)", optionName, parameterType.toString(), optionDescription));
             options.add(ApplicationCommandOptionData.builder()
@@ -105,7 +116,7 @@ public class Partition {
                 .name(commandName)
                 .description(description)
                 .options(options)
-                .type(ApplicationCommandOptionType.SUB_COMMAND.getValue())
+                .type(ApplicationCommandOption.Type.SUB_COMMAND.getValue())
                 .build();
 
 
@@ -132,6 +143,10 @@ public class Partition {
     private void setupRequestsForClass(InteractionHandlerSpec spec) {
         Class<?> handlerClassSupers = spec.getClazz();
         Object handlerInstance = spec.getFactory().create(namespace, discordClient);
+
+        if (handlerInstance instanceof MessageHandler messageHandler) {
+            this.messageHandlers.add(messageHandler);
+        }
 
         Map<String, List<ApplicationCommandOptionData>> optionsMap = new HashMap<>();
         Map<String, Method> handlersMap = new HashMap<>();
@@ -183,6 +198,7 @@ public class Partition {
         commandRequests = new ArrayList<>();
         commandHandlers = new HashMap<>();
         buttonHandlers = new ArrayList<>();
+        messageHandlers = new ArrayList<>();
 
         this.interactionHandlerSpecs.forEach(this::setupRequestsForClass);
 
@@ -196,7 +212,7 @@ public class Partition {
                 .then();
     }
 
-    public Publisher<?> handleButton(ButtonInteractEvent event) {
+    public Publisher<?> handleButton(ButtonInteractionEvent event) {
         User who = event.getInteraction().getUser();
         ButtonInteractionData interaction = new ButtonInteractionData(namespace, who, botUser, event);
         interaction.log(log::info);
@@ -210,16 +226,26 @@ public class Partition {
                 .doOnError(log::fatal);
     }
 
-    public Publisher<?> handleSlash(SlashCommandEvent event) {
+    public Publisher<?> handleSlash(ApplicationCommandInteractionEvent event) {
         User who = event.getInteraction().getUser();
-        SlashInteractionData interaction = new SlashInteractionData(namespace, who, botUser, event);
+        ApplicationCommandInteractionData interaction = new ApplicationCommandInteractionData(namespace, who, botUser, event);
         interaction.log(log::info);
 
         String command = event.getCommandName();
         if (commandHandlers.containsKey(command)) {
             return Flux.concat(commandHandlers.get(command).handle(interaction)).doOnError(log::fatal);
         } else {
-            return event.replyEphemeral("Something went wrong");
+            return event.reply("Something went wrong").withEphemeral(true);
         }
+    }
+
+    public Publisher<?> handleMessageCreate(MessageCreateEvent event) {
+        var who = event.getMember();
+        if (who.isEmpty()) {
+            return Mono.just(new Whatever());
+        }
+
+        return Flux.fromIterable(this.messageHandlers)
+                .flatMap(m -> m.handleMessageCreate(new MessageCreateData(namespace, who.get(), botUser, event)));
     }
 }

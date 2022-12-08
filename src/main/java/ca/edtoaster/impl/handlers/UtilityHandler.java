@@ -1,14 +1,13 @@
 package ca.edtoaster.impl.handlers;
 
-import ca.edtoaster.annotations.CommandNamespace;
-import ca.edtoaster.commands.InteractionHandlerSpec;
 import ca.edtoaster.annotations.Command;
+import ca.edtoaster.annotations.CommandNamespace;
 import ca.edtoaster.annotations.Option;
-import ca.edtoaster.commands.data.SlashInteractionData;
+import ca.edtoaster.commands.InteractionHandlerSpec;
+import ca.edtoaster.commands.data.ApplicationCommandInteractionData;
 import ca.edtoaster.util.Utils;
 import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
-import discord4j.core.event.domain.interaction.SlashCommandEvent;
 import discord4j.core.object.entity.Message;
 import discord4j.discordjson.json.ImmutableBulkDeleteRequest;
 import discord4j.rest.service.ChannelService;
@@ -74,10 +73,10 @@ public class UtilityHandler {
 
     @Command(description = "Clear all messages from the bot")
     public Mono<Void> clear(
-            SlashInteractionData data,
+            ApplicationCommandInteractionData data,
             @Option(name = "n", description = "Num messages", required = false)
                     Long n) {
-        SlashCommandEvent event = data.getEvent();
+        var event = data.getEvent();
         // check the last 100 messages in the channel
         if (Objects.isNull(n)) n = 100L;
         log.info("Clear! " + n);
@@ -94,7 +93,7 @@ public class UtilityHandler {
                 .doOnNext(m -> log.info("authored -- " + m.getId().asString()))
                 .collect(Collectors.toList())
                 .flatMap(this::deleteMessages)
-                .flatMap(numDeleted -> event.replyEphemeral(getDeletedString(numDeleted)));
+                .flatMap(numDeleted -> event.reply(getDeletedString(numDeleted)).withEphemeral(true));
     }
 
     public static InteractionHandlerSpec getInteractionHandlerSpec() {
@@ -102,8 +101,8 @@ public class UtilityHandler {
     }
 
     @Command(description = "Configuration")
-    public Mono<Void> config(SlashInteractionData data) {
-        SlashCommandEvent event = data.getEvent();
-        return event.replyEphemeral(String.format("Namespace: %s\nServer Invite Link: %s", namespace.asString(), Utils.getServerInviteLink(data.getBotUser())));
+    public Mono<Void> config(ApplicationCommandInteractionData data) {
+        var event = data.getEvent();
+        return event.reply(String.format("Namespace: %s\nServer Invite Link: %s", namespace.asString(), Utils.getServerInviteLink(data.getBotUser()))).withEphemeral(true);
     }
 }

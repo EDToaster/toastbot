@@ -1,6 +1,7 @@
 package ca.edtoaster.impl;
 
 import ca.edtoaster.bot.ToastBot;
+import ca.edtoaster.impl.handlers.ChatHandler;
 import ca.edtoaster.impl.handlers.UtilityHandler;
 import ca.edtoaster.impl.handlers.MusicHandler;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ public class BotRunner implements Runnable {
 
         new ToastBot(token, List.of(
                 UtilityHandler.getInteractionHandlerSpec(),
-                MusicHandler.getInteractionHandlerSpec())).run();
+                MusicHandler.getInteractionHandlerSpec(),
+                ChatHandler.getInteractionHandlerSpec())).run();
     }
 }
