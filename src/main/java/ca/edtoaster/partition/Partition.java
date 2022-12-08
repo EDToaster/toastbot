@@ -144,8 +144,8 @@ public class Partition {
         Class<?> handlerClassSupers = spec.getClazz();
         Object handlerInstance = spec.getFactory().create(namespace, discordClient);
 
-        if (handlerInstance instanceof MessageHandler messageHandler) {
-            this.messageHandlers.add(messageHandler);
+        if (handlerInstance instanceof MessageHandler) {
+            this.messageHandlers.add((MessageHandler) handlerInstance);
         }
 
         Map<String, List<ApplicationCommandOptionData>> optionsMap = new HashMap<>();
