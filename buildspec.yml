@@ -8,7 +8,7 @@ env:
 phases:
     install:
         runtime-versions:
-            java: corretto17
+            java: latest
     pre_build:
         commands:
           - echo Writing secret $DISCORD_SECRET_PROD to file
