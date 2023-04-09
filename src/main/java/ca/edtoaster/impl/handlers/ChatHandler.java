@@ -56,8 +56,6 @@ public class ChatHandler implements MessageHandler {
         return event.reply("Showing queue").withEphemeral(true)
                 .then(interaction.getChannel())
                 .doOnNext(c -> monitorChannel(c, token))
-//                .flatMap(c -> chat.query(new ChatRequest("f3c5cc77-272a-4572-b994-b7e71d0a939a", "hello")))
-//                .flatMap(s -> this.channel.get().createMessage(s))
                 .then();
     }
 

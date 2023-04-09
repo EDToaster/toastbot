@@ -17,7 +17,6 @@ import discord4j.core.event.domain.interaction.ApplicationCommandInteractionEven
 import discord4j.core.event.domain.interaction.ButtonInteractionEvent;
 import discord4j.core.event.domain.message.MessageCreateEvent;
 import discord4j.core.object.command.ApplicationCommandOption;
-import discord4j.core.object.entity.Member;
 import discord4j.core.object.entity.User;
 import discord4j.discordjson.json.ApplicationCommandOptionData;
 import discord4j.discordjson.json.ApplicationCommandRequest;
@@ -118,15 +117,6 @@ public class Partition {
                 .options(options)
                 .type(ApplicationCommandOption.Type.SUB_COMMAND.getValue())
                 .build();
-
-
-//        commandRequests.add(
-//                ApplicationCommandRequest.builder()
-//                        .name(commandName)
-//                        .description(description)
-//                        .options(options)
-//                        .build());
-//        commandHandlers.put(commandName, new PartitionedCommandHandler(commandName, options, method, handlerInstance));
     }
 
     private void configureButton(final Method method, Object handlerInstance) {
@@ -141,8 +131,8 @@ public class Partition {
     }
 
     private void setupRequestsForClass(InteractionHandlerSpec spec) {
-        Class<?> handlerClassSupers = spec.getClazz();
-        Object handlerInstance = spec.getFactory().create(namespace, discordClient);
+        Class<?> handlerClassSupers = spec.clazz();
+        Object handlerInstance = spec.factory().create(namespace, discordClient);
 
         if (handlerInstance instanceof MessageHandler) {
             this.messageHandlers.add((MessageHandler) handlerInstance);
@@ -153,9 +143,9 @@ public class Partition {
 
         List<ApplicationCommandOptionData> subCommandRequests = new ArrayList<>();
 
-        CommandNamespace annotation = spec.getClazz().getAnnotation(CommandNamespace.class);
+        CommandNamespace annotation = spec.clazz().getAnnotation(CommandNamespace.class);
         if (Objects.isNull(annotation)) {
-            throw new IllegalArgumentException("Passed in class " + spec.getClazz().toString() + " that was not annotaed with @Namespace");
+            throw new IllegalArgumentException(String.format("Passed in class %s that was not annotated with @Namespace", spec.clazz()));
         }
 
         String commandName = annotation.name();

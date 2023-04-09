@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cd /home/ec2-user/server
+cd /home/ec2-user/server || exit
 echo "DISCORD_SECRET_$DEPLOYMENT_GROUP_NAME"
 DISCORD_TOKEN=$(cat "DISCORD_SECRET_$DEPLOYMENT_GROUP_NAME") nohup /usr/bin/java -jar target/*.jar > /dev/null 2>&1 &
 
