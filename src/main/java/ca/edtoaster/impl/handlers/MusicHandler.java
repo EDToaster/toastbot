@@ -22,6 +22,7 @@ import discord4j.core.object.component.Button;
 import discord4j.core.object.entity.Member;
 import discord4j.core.object.entity.Message;
 import discord4j.core.object.reaction.ReactionEmoji;
+import discord4j.core.spec.EmbedCreateFields;
 import discord4j.core.spec.EmbedCreateSpec;
 import discord4j.core.spec.InteractionApplicationCommandCallbackSpec;
 import discord4j.core.spec.MessageCreateSpec;
@@ -109,9 +110,12 @@ public class MusicHandler {
     private EmbedCreateSpec getQueueMessageEmbed() {
         String currentlyPlaying = this.trackScheduler.getCurrentlyPlaying();
         String queue = this.trackScheduler.getUpNext();
+        EmbedCreateFields.Field queueField = EmbedCreateFields.Field.of("Up Next:", queue, false);
+
         return EmbedCreateSpec.create()
                 .withTitle(trackScheduler.isPaused() ? "Paused ..." : "Now Playing:")
-                .withDescription(currentlyPlaying + "\n" + queue)
+                .withDescription(currentlyPlaying)
+                .withFields(queueField)
                 .withColor(Color.PINK);
     }
 
